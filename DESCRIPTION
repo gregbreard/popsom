@@ -8,4 +8,7 @@ Maintainer: Lutz Hamel <hamel@cs.uri.edu>
 Imports: som,class,fields, graphics, stats, grDevices	
 Description: State of the art functions for constructing and evaluating self-organizing maps (SOMs).
 License: GPL
+Imports: Rcpp (>= 0.12.4)
+LinkingTo: Rcpp, RcppArmadillo
+Depends: RcppArmadillo
 URL: http://homepage.cs.uri.edu/faculty/hamel/

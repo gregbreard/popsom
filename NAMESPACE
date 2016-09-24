@@ -1,5 +1,6 @@
 useDynLib(popsom)
-import(som,class,fields,graphics,stats,grDevices)
+import(som,class,fields,graphics,stats,grDevices,RcppArmadillo)
+importFrom(Rcpp, evalCpp)
 export(
   "map.build",
   "map.convergence",
@@ -9,4 +10,5 @@ export(
   "map.projection",
   "map.significance"
 )
-
+# for testing:
+exportPattern("^[[:alpha:]]+")

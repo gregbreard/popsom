@@ -1,2 +1,2 @@
 # PKG_FCFLAGS = -Ofast -cpp
-
+PKG_CXXFLAGS = -std=c++11
