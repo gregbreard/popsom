@@ -1,6 +1,6 @@
 Package: popsom
-Version: 4.0.1
-Date: 2016-08-14
+Version: 4.1
+Date: 2016-09-30
 Title: Functions for Constructing and Evaluating Self-Organizing Maps
 Authors@R: c(person("Lutz", "Hamel", role = c("aut", "cre"), email = "hamel@cs.uri.edu"),
 		     person("Benjamin", "Ott", role = "aut"), person("Gregory", "Breard", role = "aut"))
@@ -9,6 +9,5 @@ Imports: som,class,fields, graphics, stats, grDevices
 Description: State of the art functions for constructing and evaluating self-organizing maps (SOMs).
 License: GPL
 Imports: Rcpp (>= 0.12.4)
-LinkingTo: Rcpp, RcppArmadillo
-Depends: RcppArmadillo
+LinkingTo: Rcpp
 URL: http://homepage.cs.uri.edu/faculty/hamel/

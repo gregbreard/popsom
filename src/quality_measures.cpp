@@ -1,5 +1,3 @@
-// [[Rcpp::depends(RcppArmadillo)]]
-
 #include <cmath>
 #include "qm_utilities.cpp"
 
@@ -44,8 +42,7 @@ List GetQuantizationError(List map) {
   double err = total_dist / data.nrow();
   
   // Return list
-  List out;
-  out["val"] = err;
+  List out = List::create(Named("val") = err);
   
   return out;
 } // end GetQuantizationError
@@ -121,8 +118,7 @@ List GetTopographicError(List map) {
   double err = (double)errors / N;
   
   // Return list
-  List out;
-  out["val"] = err;
+  List out = List::create(Named("val") = err);
   
   return out;
 } // end GetTopographicError
@@ -156,7 +152,7 @@ List GetTopographicFunction(List map) {
     
     // Get the vector for the data point
     NumericVector point = data(i, _);
-    
+   
     // Check each nueron for bmu
     for (int j = 0; j < neurons.nrow(); j++) {
       // Get the vector for the neuron
@@ -182,9 +178,12 @@ List GetTopographicFunction(List map) {
         // Update index
         sbmu_index = j;
       } // end if
+      
+      //Rcout << "j " << j << std::endl;
     } // end for (j)
     
     C(bmu_index, sbmu_index) = 1;
+    C(sbmu_index, bmu_index) = 1;
   } // end for (i)
   
   // Build the Delaunay Triangulation matrix (shortest paths)
@@ -194,8 +193,11 @@ List GetTopographicFunction(List map) {
   // Note: Limitation of top func is number of input vectors necessary to compute Dm (see pg 260)
   
   // Initialize function results
-  NumericVector ks(2 * x * y - 1);
-  NumericVector phi(2 * x * y - 1);
+  
+  NumericVector ks = NumericVector(2 * x * y - 1);
+  NumericVector phi = NumericVector(2 * x * y - 1);
+  
+  //Rcout << "got here" << std::endl;
   
   // Calculates all function values
   for (int i = 0; i < 2 * x * y - 1; i++) {
@@ -229,7 +231,7 @@ List GetTopographicFunction(List map) {
         p = p + f;
       } // end for (l)
     } // end for (j)
-    
+
     ks(i) = k;
     phi(i) = p / (x * y);
   } // end for (i)
@@ -238,10 +240,9 @@ List GetTopographicFunction(List map) {
   phi(x * y) = phi(x * y + 1) + phi(x * y - 1); 
   
   // Return list
-  List out;
-  out["C"] = C;
-  out["k"] = ks;
-  out["phi"] = phi;
+  List out = List::create(Named("C") = C,
+                          Named("k") = ks,
+                          Named("phi") = phi);
   
   return out;
 } // end GetTopographicFunction
@@ -337,14 +338,12 @@ List GetNeighborhoodPreservation(List map, int k) {
   M_2 = 1 - (2 * M_2 / (N * k * (2 * N - 3 * k - 1)));
   
   // Return list
-  List out;
-  out["k"] = k;
-  out["trustworthiness"] = M_1;
-  out["neighborhood.preservation"] = M_2;
+  List out = List::create(Named("k") = k,
+                          Named("trustworthiness") = M_1,
+                          Named("neighborhood.preservation") = M_2);
   
   return out;
 } // end GetNeighborhoodPreservation
-
 
 // Reference:
 // J. Hirschberg and A. Rosenberg, V-Measure: A conditional entropy-based external cluster evaluation,
@@ -370,7 +369,7 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
     A(labels[i] - 1, clusters[i] - 1) = A(labels[i] - 1, clusters[i] - 1) + 1;
   //   convert to probabilities for entropy (H)
   A = A / N;
-  
+
   // Initialize values
   double H_CK = 0.0;
   double H_C = 0.0;
@@ -390,6 +389,8 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   for (int c = 0; c < n; c++)
     H_C = H_C + sum(A(c, _)) * log(sum(A(c, _)));
   H_C = - H_C;
+  if (std::isnan(H_C))
+    H_C = 0;
  
   // Calculate H(K|C)
   for (int c = 0; c < n; c++)
@@ -402,6 +403,8 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   for (int k = 0; k < m; k++)
     H_K = H_K + sum(A(_, k)) * log(sum(A(_, k)));
   H_K = - H_K;
+  if (std::isnan(H_K))
+    H_K = 0;
   
   // Calculate homogeneity
   if (H_C == 0)
@@ -419,13 +422,10 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   double v = ((1 + beta) * homo * comp) / ((beta * homo) + comp);
   
   // Return list
-  List out;
-  //out["labels"] = labels;
-  //out["clusters"] = clusters;
-  out["beta"] = beta;
-  out["homogeneity"] = homo;
-  out["completeness"] = comp;
-  out["v.measure"] = v;
+  List out = List::create(Named("beta") = beta,
+                          Named("homogeneity") = homo,
+                          Named("completeness") = comp,
+                          Named("v.measure") = v);
   
   return out;
 } // end GetVMeasure

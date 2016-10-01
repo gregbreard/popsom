@@ -1,5 +1,5 @@
 useDynLib(popsom)
-import(som,class,fields,graphics,stats,grDevices,RcppArmadillo)
+import(som,class,fields,graphics,stats,grDevices)
 importFrom(Rcpp, evalCpp)
 export(
   "map.build",

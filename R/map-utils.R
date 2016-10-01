@@ -412,6 +412,41 @@ map.significance <- function(map,graphics=TRUE,feature.labels=TRUE)
 	}
 }
 
+### map.clusters - compute the data clusters from the starburst representation of the map
+# parameters:
+# - map is an object if type 'map'
+# - explicit controls the shape of the connected components
+# - smoothing controls the smoothing level of the umat (NULL,0,>0)
+# returns:
+# - cluster labels for data points
+map.clusters <- function(map, explicit = FALSE, smoothing = 2) {
+  if (class(map) != "map")
+    stop("map.clusters: first argument is not a map object.")
+  
+  # calculate the heat map
+  umat <- compute.umat(map, smoothing = smoothing)
+  
+  # find the centroid for each neuron on the map
+  centroids <- compute.centroids(map, umat, explicit)
+  
+  # initialize the cluster labels for the neurons
+  clusters <- rep(0, map$xdim * map$ydim)
+  
+  # convert the centroids into a list of cluster labels
+  centroid.pairs <- cbind(as.vector(centroids$centroid.x), as.vector(centroids$centroid.y))
+  centers <- unique(centroid.pairs)
+  for (i in 1:length(clusters)) {
+    for (j in 1:length(centers)) {
+      if (all(centroid.pairs[i, ] == centers[j, ])) {
+        clusters[i] = j
+        break
+      } # end if
+    } # end for (j)
+  } # end for (i)
+  
+  # return the cluster labels of the data points
+  clusters[map$visual]
+} # end map.clusters
 
 
 ############################### local functions #################################
