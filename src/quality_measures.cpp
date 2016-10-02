@@ -6,44 +6,24 @@ using namespace Rcpp;
 // Reference:
 // T. Kohonen, Self-organizing maps, Berlin: Springer, 2001.
 // [[Rcpp::export(name = "get.quant.err")]]
-List GetQuantizationError(List map) {
-  // Create matrices for the data and neurons
-  NumericMatrix data = df_to_mat(DataFrame(map["data"]));
-  NumericMatrix neurons = df_to_mat(DataFrame(map["neurons"]));
-  
-  // Initialize distance
+List GetQuantizationError(NumericMatrix dist_cross) {
+  // Initialize
+  int n = dist_cross.nrow();
   double total_dist = 0;
   
   // Check each data point
-  for (int i = 0; i < data.nrow(); i++) {
-    // Intialize variables
-    double bmu_dist = std::numeric_limits<double>::infinity();
-    
-    // Get the vector for the data point
-    NumericVector point = data(i, _);
-    
-    // Check each nueron for bmu
-    for (int j = 0; j < neurons.nrow(); j++) {
-      // Get the vector for the neuron
-      NumericVector neuron = neurons(j, _);
-      
-      // Calculate the Euclidean distance between the data and neuron vectors
-      double dist = calc_dist(neuron, point);
-      
-      // Check for better distance
-      if (dist < bmu_dist)
-        bmu_dist = dist;
-    } // end for (j)
-    
-    total_dist = total_dist + bmu_dist;	
+  for (int i = 0; i < n; i++) {
+    NumericVector between = dist_cross.row(i);
+    double bmu_dist = min(between);
+    total_dist += bmu_dist;	
   } // end for (i)
   
   // Calculate the error
-  double err = total_dist / data.nrow();
-  
+  double err = total_dist / n;
+
   // Return list
   List out = List::create(Named("val") = err);
-  
+
   return out;
 } // end GetQuantizationError
 
@@ -51,56 +31,28 @@ List GetQuantizationError(List map) {
 // G. Polzlbauer, Survey and comparison of quality measures for self-organizing maps,
 // in Proc. 5th Workshop Data Analysis, pg 67–82, 2004.
 // [[Rcpp::export(name = "get.top.err")]]
-List GetTopographicError(List map) {
-  // Create matrices for the data and neurons
-  NumericMatrix data = df_to_mat(DataFrame(map["data"]));
-  NumericMatrix neurons = df_to_mat(DataFrame(map["neurons"]));
-    
-  // Create variables for other map properties we need
-  int x = map["xdim"];
-  int N = data.nrow();
-    
-  // Initialize error count
+List GetTopographicError(NumericMatrix dist_cross, int xdim) {
+  // Initialize
+  int n = dist_cross.nrow();
   int errors = 0;
-
+  
   // Check each data point
-  for (int i = 0; i < N; i++) {
+  for (int i = 0; i < n; i++) {
     // Intialize variables
-    int bmu_index = 0;
-    int sbmu_index = 0;
-    double bmu_dist = std::numeric_limits<double>::infinity();
-    double sbmu_dist = std::numeric_limits<double>::infinity();
+    NumericVector between = dist_cross.row(i);
     
-    // Get the vector for the data point
-    NumericVector point = data(i, _);
+    // Initialize the unsorted index vectors
+    std::vector<int> idx(between.size());
+    std::iota(idx.begin(), idx.end(), 0);
     
-    // Check each nueron for bmu
-    for (int j = 0; j < neurons.nrow(); j++) {
-      // Get the vector for the neuron
-      NumericVector neuron = neurons(j, _);
-      
-      // Calculate the euclidean distance between the data and neuron vectors
-      double dist = calc_dist(neuron, point);
-      
-      // Check for better best distance (if better than bmu, its better than sbmu too)
-      if (dist < bmu_dist) {
-        // Update distances
-        sbmu_dist = bmu_dist;
-        bmu_dist = dist;
-        
-        // Update indices
-        sbmu_index = bmu_index;
-        bmu_index = j;
-      } // If not, check second best distance
-      else if (dist < sbmu_dist) {
-        // Update sbmu distance
-        sbmu_dist = dist;
-          
-        // Update index
-        sbmu_index = j;
-      } // end if
-    } // end for (j)
- 
+    // Sort the indices by the distance
+    std::sort(idx.begin(), idx.end(),
+              [between](double i1, double i2) {return between[i1] < between[i2];});
+    
+    // Get the best (and second best) matching units
+    int bmu_index = idx[0];
+    int sbmu_index = idx[1];
+    
     // Considering the neighborhood:
     // n-xdim-1 n-xdim n-xdim+1
     //   n-1       n      n+1
@@ -110,16 +62,16 @@ List GetTopographicError(List map) {
     int dif = abs(bmu_index - sbmu_index);
     
     // Check for error
-    if (!(dif == 1 || dif == x - 1 || dif == x || dif == x + 1))
+    if (!(dif == 1 || dif == xdim - 1 || dif == xdim || dif == xdim + 1))
         errors++;	
   } // end for (i)
   
   // Calculate the error
-  double err = (double)errors / N;
+  double err = (double)errors / n;
   
   // Return list
   List out = List::create(Named("val") = err);
-  
+
   return out;
 } // end GetTopographicError
 
@@ -128,62 +80,35 @@ List GetTopographicError(List map) {
 // feature maps: exact definition and measurement, IEEE Trans. Neural Netw., vol. 8 no. 2, 
 // pg 256 - 266, 1997.
 // [[Rcpp::export(name = "get.top.func")]]
-List GetTopographicFunction(List map) {
-  // Create matrices for the data and neurons
-  NumericMatrix data = df_to_mat(DataFrame(map["data"]));
-  NumericMatrix neurons = df_to_mat(DataFrame(map["neurons"]));
-  
-  // Create variables for other map properties we need
-  int x = map["xdim"];
-  int y = map["ydim"];
-  int N = data.nrow();
+List GetTopographicFunction(NumericMatrix dist_cross, int xdim) {
+  // Initialize
+  int n = dist_cross.nrow();
+  int m = dist_cross.ncol();
   
   // Initialize the connectivity and Delaunay Triangulation matrices
-  NumericMatrix C(x * y, x * y);
-  NumericMatrix Dm(x * y, x * y);
+  NumericMatrix C(m, m);
+  NumericMatrix Dm(m, m);
   
   // Build the connectivity matrix
-  for (int i = 0; i < N; i++) {
+  for (int i = 0; i < n; i++) {
     // Intialize variables
-    int bmu_index = 0;
-    int sbmu_index = 0;
-    double bmu_dist = std::numeric_limits<double>::infinity();
-    double sbmu_dist = std::numeric_limits<double>::infinity();
+    NumericVector between = dist_cross.row(i);
     
-    // Get the vector for the data point
-    NumericVector point = data(i, _);
-   
-    // Check each nueron for bmu
-    for (int j = 0; j < neurons.nrow(); j++) {
-      // Get the vector for the neuron
-      NumericVector neuron = neurons(j, _);
-      
-      // Calculate the euclidean distance between the data and neuron vectors
-      double dist = calc_dist(neuron, point);
-      
-      // Check for better best distance (if better than bmu, its better than sbmu too)
-      if (dist < bmu_dist) {
-        // Update distances
-        sbmu_dist = bmu_dist;
-        bmu_dist = dist;
-        
-        // Update indices
-        sbmu_index = bmu_index;
-        bmu_index = j;
-      } // If not, check second best distance
-      else if (dist < sbmu_dist) {
-        // Update sbmu distance
-        sbmu_dist = dist;
-        
-        // Update index
-        sbmu_index = j;
-      } // end if
-      
-      //Rcout << "j " << j << std::endl;
-    } // end for (j)
+    // Initialize the unsorted index vectors
+    std::vector<int> idx(between.size());
+    std::iota(idx.begin(), idx.end(), 0);
     
+    // Sort the indices by the distance
+    std::sort(idx.begin(), idx.end(),
+              [between](double i1, double i2) {return between[i1] < between[i2];});
+    
+    // Get the best (and second best) matching units
+    int bmu_index = idx[0];
+    int sbmu_index = idx[1];
+    
+    // Add an edge between the best and second best matching units
     C(bmu_index, sbmu_index) = 1;
-    C(sbmu_index, bmu_index) = 1;
+    C(sbmu_index, bmu_index) = 1;	
   } // end for (i)
   
   // Build the Delaunay Triangulation matrix (shortest paths)
@@ -193,36 +118,35 @@ List GetTopographicFunction(List map) {
   // Note: Limitation of top func is number of input vectors necessary to compute Dm (see pg 260)
   
   // Initialize function results
-  
-  NumericVector ks = NumericVector(2 * x * y - 1);
-  NumericVector phi = NumericVector(2 * x * y - 1);
-  
-  //Rcout << "got here" << std::endl;
+  NumericVector ks = NumericVector(2 * m - 1);
+  NumericVector phi = NumericVector(2 * m - 1);
   
   // Calculates all function values
-  for (int i = 0; i < 2 * x * y - 1; i++) {
-    int k = i - x * y + 1;
+  for (int i = 0; i < 2 * m - 1; i++) {
+    int k = i - m + 1;
     double p = 0.0;
     
     // Calculate phi(k)
-    for (int j = 0; j < x * y; j++) {
-      for (int l = 0; l < x * y; l++) {
+    for (int j = 0; j < m; j++) {
+      for (int l = 0; l < m; l++) {
         int f = 0;
         NumericVector i_idx(2);
         NumericVector j_idx(2);
-        i_idx(0) = j % x;
-        i_idx(1) = j / x;
-        j_idx(0) = l % x;
-        j_idx(1) = l / x;
+        i_idx(0) = j % xdim;
+        i_idx(1) = j / xdim;
+        j_idx(0) = l % xdim;
+        j_idx(1) = l / xdim;
       
         // Calculate f(k)
         if (k > 0) {
-          double dist = calc_dist_max(i_idx, j_idx);
+          double dist = max(i_idx - j_idx);
+            //calc_dist_max(i_idx, j_idx);
           double dist_Dm = 1.0;
           if (dist > k && dist_Dm == 1)
             f++;
         } else if (k < 0) {
-          double dist = calc_dist(i_idx, j_idx);
+          double dist = sqrt(sum(pow(i_idx - j_idx, 2)));
+            //calc_dist(i_idx, j_idx);
           double dist_Dm = k + 1;
           if (dist == 1 && dist_Dm > k)
             f++;
@@ -233,11 +157,11 @@ List GetTopographicFunction(List map) {
     } // end for (j)
 
     ks(i) = k;
-    phi(i) = p / (x * y);
+    phi(i) = p / (m);
   } // end for (i)
   
   // Set phi(0)
-  phi(x * y) = phi(x * y + 1) + phi(x * y - 1); 
+  phi(m) = phi(m + 1) + phi(m - 1); 
   
   // Return list
   List out = List::create(Named("C") = C,
@@ -251,32 +175,17 @@ List GetTopographicFunction(List map) {
 // J. Venna and S. Kaski, "Neighborhood preservation in nonlinear projection methods: 
 // An experimental study", Lecture Notes in Comput. Sci., vol. 2130, pg 485-491, 2001.
 // [[Rcpp::export(name = "get.hood.pres")]]
-List GetNeighborhoodPreservation(List map, int k) {
+List GetNeighborhoodPreservation(NumericMatrix dist_data, NumericMatrix dist_proj, int k) {
   // Initialize
+  int n = dist_data.nrow();
   double M_1 = 0.0;
   double M_2 = 0.0;
   
-  // Create matrices for the data and neurons
-  NumericMatrix data = df_to_mat(DataFrame(map["data"]));
-  NumericMatrix neurons = df_to_mat(DataFrame(map["neurons"]));
-  NumericVector projection = df_to_mat(DataFrame(map["visual"]));
-  
-  // Create list of code book vectors from the projection
-  NumericMatrix pdata(projection.size(), neurons.cols());
-  for (int i = 0; i < projection.size(); i++) {
-    int p = projection[i] - 1;
-    pdata(i, _) = neurons(p, _);
-  } // end for (i)
-  
-  // Get the distances for the data and projection
-  NumericMatrix dist_mat = calc_dist_mat(data);
-  NumericMatrix pdist_mat = calc_dist_mat(pdata);
-  
   // Check each data point
-  for (int i = 0; i < data.nrow(); i++) {
+  for (int i = 0; i < n; i++) {
     // Get the distances for x_i
-    NumericVector dist = dist_mat.row(i);
-    NumericVector pdist = pdist_mat.row(i);
+    NumericVector dist = dist_data.row(i);
+    NumericVector pdist = dist_proj.row(i);
     
     // Initialize the unsorted index vectors
     std::vector<int> idx(dist.size());
@@ -333,9 +242,8 @@ List GetNeighborhoodPreservation(List map, int k) {
   } // end for (i)
   
   // Convert the sum
-  int N = data.nrow();
-  M_1 = 1 - (2 * M_1 / (N * k * (2 * N - 3 * k - 1)));
-  M_2 = 1 - (2 * M_2 / (N * k * (2 * N - 3 * k - 1)));
+  M_1 = 1 - (2 * M_1 / (n * k * (2 * n - 3 * k - 1)));
+  M_2 = 1 - (2 * M_2 / (n * k * (2 * n - 3 * k - 1)));
   
   // Return list
   List out = List::create(Named("k") = k,
@@ -354,19 +262,18 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   if (labels.size() != clusters.size())
     stop("get.v.measure: label and cluster vectors sizes don't match.");
   
-  // Get the levels
-  IntegerVector label_lev = sort_unique(labels);
-  IntegerVector clust_lev = sort_unique(clusters);
-  
-  // Initialize sizes
+  // Get the level sizes
   int N = labels.size();
-  int n = label_lev.size();
-  int m = clust_lev.size(); 
+  int n = sort_unique(labels).size();
+  int m = sort_unique(clusters).size(); 
   
   // Generate the contingency table
   NumericMatrix A(n, m);
-  for (int i = 0; i < N; i++)
-    A(labels[i] - 1, clusters[i] - 1) = A(labels[i] - 1, clusters[i] - 1) + 1;
+  for (int i = 0; i < N; i++) {
+    int l = labels[i] - 1;
+    int c = clusters[i] - 1;
+    A(l, c) = A(l, c) + 1;
+  }
   //   convert to probabilities for entropy (H)
   A = A / N;
 
@@ -391,7 +298,7 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   H_C = - H_C;
   if (std::isnan(H_C))
     H_C = 0;
- 
+  
   // Calculate H(K|C)
   for (int c = 0; c < n; c++)
     for (int k = 0; k < m; k++)
@@ -417,7 +324,7 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
     comp = 1;
   else
     comp = 1 - H_KC / H_K;
-  
+ 
   // Calculate the weighted harmonic mean of homogeneity and completeness
   double v = ((1 + beta) * homo * comp) / ((beta * homo) + comp);
   
@@ -429,3 +336,4 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   
   return out;
 } // end GetVMeasure
+
