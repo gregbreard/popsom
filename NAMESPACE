@@ -8,7 +8,10 @@ export(
   "map.accuracy",
   "map.starburst",
   "map.projection",
-  "map.significance"
+  "map.significance",
+  "map.plot2d",
+  "map.plot3d",
+  "map.label.accuracy"
 )
 # for testing:
 exportPattern("^[[:alpha:]]+")

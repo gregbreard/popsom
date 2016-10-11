@@ -1,10 +1,32 @@
-#include <cmath>
-#include "qm_utilities.cpp"
+/*** quality_measures.cpp
+ * version 0.1
+ * (c) 2016 Gregory Breard, University of Rhode Island
+ *
+ * This file contains a set of functions used for 
+ * evaluating the quality of self-organizing maps (SOMs).
+ *** License
+ * This program is free software; you can redistribute it 
+ * and/or modify it under the terms of the GNU General 
+ * Public License as published by the Free Software 
+ * Foundation.
+ *
+ * This program is distributed in the hope that it will 
+ * be useful, but WITHOUT ANY WARRANTY; without even the
+ * implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU General Public License
+ * for more details.
+ *
+ * A copy of the GNU General Public License is available 
+ * at: http://www.r-project.org/Licenses/
+ ***/
+
+#include <Rcpp.h>
 
 using namespace Rcpp;
 
 // Reference:
-// T. Kohonen, Self-organizing maps, Berlin: Springer, 2001.
+// T. Kohonen, Self-organizing maps, Berlin: Springer, 
+// 2001.
 // [[Rcpp::export(name = "get.quant.err")]]
 List GetQuantizationError(NumericMatrix dist_cross) {
   // Initialize
@@ -28,10 +50,12 @@ List GetQuantizationError(NumericMatrix dist_cross) {
 } // end GetQuantizationError
 
 // Reference:
-// G. Polzlbauer, Survey and comparison of quality measures for self-organizing maps,
-// in Proc. 5th Workshop Data Analysis, pg 67–82, 2004.
+// G. Polzlbauer, Survey and comparison of quality 
+// measures for self-organizing maps, in Proc. 5th 
+// Workshop Data Analysis, pg 67–82, 2004.
 // [[Rcpp::export(name = "get.top.err")]]
-List GetTopographicError(NumericMatrix dist_cross, int xdim) {
+List GetTopographicError(NumericMatrix dist_cross, 
+                         int xdim) {
   // Initialize
   int n = dist_cross.nrow();
   int errors = 0;
@@ -47,7 +71,9 @@ List GetTopographicError(NumericMatrix dist_cross, int xdim) {
     
     // Sort the indices by the distance
     std::sort(idx.begin(), idx.end(),
-              [between](double i1, double i2) {return between[i1] < between[i2];});
+              [between](double i1, double i2) {
+                    return between[i1] < between[i2];
+                });
     
     // Get the best (and second best) matching units
     int bmu_index = idx[0];
@@ -62,7 +88,9 @@ List GetTopographicError(NumericMatrix dist_cross, int xdim) {
     int dif = abs(bmu_index - sbmu_index);
     
     // Check for error
-    if (!(dif == 1 || dif == xdim - 1 || dif == xdim || dif == xdim + 1))
+    if (!(dif == 1 || dif == xdim - 1 
+                          || dif == xdim 
+                              || dif == xdim + 1))
         errors++;	
   } // end for (i)
   
@@ -76,18 +104,20 @@ List GetTopographicError(NumericMatrix dist_cross, int xdim) {
 } // end GetTopographicError
 
 // Reference:
-// T.  Villmann, R.  Der, M.  Herrmann, and T.  Martinetz, Topology preservation in self-organizing 
-// feature maps: exact definition and measurement, IEEE Trans. Neural Netw., vol. 8 no. 2, 
-// pg 256 - 266, 1997.
+// T.  Villmann, R. Der, M. Herrmann, and T. Martinetz, 
+// Topology preservation in self-organizing feature maps:
+// exact definition and measurement, IEEE Trans. Neural 
+// Netw., vol. 8 no. 2, pg 256 - 266, 1997.
 // [[Rcpp::export(name = "get.top.func")]]
-List GetTopographicFunction(NumericMatrix dist_cross, int xdim) {
+List GetTopographicFunction(NumericMatrix dist_cross, 
+                            int xdim) {
   // Initialize
   int n = dist_cross.nrow();
   int m = dist_cross.ncol();
   
-  // Initialize the connectivity and Delaunay Triangulation matrices
+  // Initialize the connectivity and Delaunay 
+  // Triangulation matrices
   NumericMatrix C(m, m);
-  NumericMatrix Dm(m, m);
   
   // Build the connectivity matrix
   for (int i = 0; i < n; i++) {
@@ -100,68 +130,89 @@ List GetTopographicFunction(NumericMatrix dist_cross, int xdim) {
     
     // Sort the indices by the distance
     std::sort(idx.begin(), idx.end(),
-              [between](double i1, double i2) {return between[i1] < between[i2];});
+              [between](double i1, double i2) {
+                      return between[i1] < between[i2];
+                });
     
     // Get the best (and second best) matching units
     int bmu_index = idx[0];
     int sbmu_index = idx[1];
     
-    // Add an edge between the best and second best matching units
+    // Add an edge between the best and second 
+    // best matching units
     C(bmu_index, sbmu_index) = 1;
     C(sbmu_index, bmu_index) = 1;	
   } // end for (i)
   
-  // Build the Delaunay Triangulation matrix (shortest paths)
-  
-  // TODO: Need to implement
-  
-  // Note: Limitation of top func is number of input vectors necessary to compute Dm (see pg 260)
+  // Build the Delaunay Triangulation matrix (shortest
+  // paths) using Floyd–Warshall algorithm
+  //   initialize paths
+  NumericMatrix Dm(clone(C));
+  for (int i = 0; i < m; i++)
+    for (int j = 0; j < m; j++)
+      if (i == j)
+        Dm(i, j) = 0;
+      else if (Dm(i, j) != 1)
+        Dm(i, j) = std::numeric_limits<double>::infinity();
+  //   find shortest paths
+  for (int k = 0; k < m; k++)
+    for (int i = 0; i < m; i++)
+      for (int j = 0; j < m; j++)
+        if (Dm(i, k) + Dm(k, j) < Dm(i, j))
+          Dm(i, j) = Dm(i, k) + Dm(k, j);
   
   // Initialize function results
   NumericVector ks = NumericVector(2 * m - 1);
   NumericVector phi = NumericVector(2 * m - 1);
   
-  // Calculates all function values
-  for (int i = 0; i < 2 * m - 1; i++) {
-    int k = i - m + 1;
-    double p = 0.0;
-    
-    // Calculate phi(k)
-    for (int j = 0; j < m; j++) {
-      for (int l = 0; l < m; l++) {
-        int f = 0;
-        NumericVector i_idx(2);
-        NumericVector j_idx(2);
-        i_idx(0) = j % xdim;
-        i_idx(1) = j / xdim;
-        j_idx(0) = l % xdim;
-        j_idx(1) = l / xdim;
+  // Check that we have a valid triangulation
+  if (max(Dm) == std::numeric_limits<double>::infinity()) {
+    // Can't calculate
+    for (int i = 0; i < 2 * m - 1; i++) {
+      ks(i) = i - m + 1;
+      phi(i) = nan("");
+    } // end for (i)
+  } else {
+    // Calculates all function values
+    for (int i = 0; i < 2 * m - 1; i++) {
+      int k = i - m + 1;
+      double p = 0.0;
       
-        // Calculate f(k)
-        if (k > 0) {
-          double dist = max(i_idx - j_idx);
-            //calc_dist_max(i_idx, j_idx);
-          double dist_Dm = 1.0;
-          if (dist > k && dist_Dm == 1)
-            f++;
-        } else if (k < 0) {
-          double dist = sqrt(sum(pow(i_idx - j_idx, 2)));
-            //calc_dist(i_idx, j_idx);
-          double dist_Dm = k + 1;
-          if (dist == 1 && dist_Dm > k)
-            f++;
-        } // end if
+      // Calculate phi(k)
+      for (int j = 0; j < m; j++) {
+        for (int l = 0; l < m; l++) {
+          int f = 0;
+          NumericVector i_idx(2);
+          NumericVector j_idx(2);
+          i_idx(0) = j % xdim;
+          i_idx(1) = j / xdim;
+          j_idx(0) = l % xdim;
+          j_idx(1) = l / xdim;
         
-        p = p + f;
-      } // end for (l)
-    } // end for (j)
-
-    ks(i) = k;
-    phi(i) = p / (m);
-  } // end for (i)
+          // Calculate f(k)
+          if (k > 0) {
+            double dist = max(i_idx - j_idx);
+            double dist_Dm = Dm(j, l);
+            if (dist > k && dist_Dm == 1)
+              f++;
+          } else if (k < 0) {
+            double dist = sqrt(sum(pow(i_idx - j_idx, 2)));
+            double dist_Dm = Dm(j, l);
+            if (dist == 1 && dist_Dm > k)
+              f++;
+          } // end if
+          
+          p = p + f;
+        } // end for (l)
+      } // end for (j)
   
-  // Set phi(0)
-  phi(m) = phi(m + 1) + phi(m - 1); 
+      ks(i) = k;
+      phi(i) = p / (m);
+    } // end for (i)
+    
+    // Set phi(0)
+    phi(m) = phi(m + 1) + phi(m - 1); 
+  } // end if
   
   // Return list
   List out = List::create(Named("C") = C,
@@ -172,10 +223,14 @@ List GetTopographicFunction(NumericMatrix dist_cross, int xdim) {
 } // end GetTopographicFunction
 
 // Reference:
-// J. Venna and S. Kaski, "Neighborhood preservation in nonlinear projection methods: 
-// An experimental study", Lecture Notes in Comput. Sci., vol. 2130, pg 485-491, 2001.
+// J. Venna and S. Kaski, "Neighborhood preservation in 
+// nonlinear projection methods: An experimental study", 
+// Lecture Notes in Comput. Sci., vol. 2130, pg 485-491, 
+// 2001.
 // [[Rcpp::export(name = "get.hood.pres")]]
-List GetNeighborhoodPreservation(NumericMatrix dist_data, NumericMatrix dist_proj, int k) {
+List GetNeighborhoodPreservation(NumericMatrix dist_data, 
+                                 NumericMatrix dist_proj, 
+                                 int k) {
   // Initialize
   int n = dist_data.nrow();
   double M_1 = 0.0;
@@ -195,46 +250,64 @@ List GetNeighborhoodPreservation(NumericMatrix dist_data, NumericMatrix dist_pro
     
     // Sort the indices by the distance
     std::sort(idx.begin(), idx.end(),
-                [dist](double i1, double i2) {return dist[i1] < dist[i2];});
+                [dist](double i1, double i2) {
+                      return dist[i1] < dist[i2];
+                  });
     std::sort(pidx.begin(), pidx.end(),
-                [pdist](double i1, double i2) {return pdist[i1] < pdist[i2];});
+                [pdist](double i1, double i2) {
+                      return pdist[i1] < pdist[i2];
+                  });
     
     // Get all x_j in (and not in)  C_k(x_i) 
     std::vector<int> Ck(idx.begin(), idx.begin() + k);
     std::vector<int> not_Ck(idx.begin() + k, idx.end());
     
     // Get all x_j in (and not in) C^_k(x_i)
-    std::vector<int> hat_Ck(pidx.begin(), pidx.begin() + k);
-    std::vector<int> not_hat_Ck(pidx.begin() + k, pidx.end());
+    std::vector<int> hat_Ck(pidx.begin(), 
+                            pidx.begin() + k);
+    std::vector<int> not_hat_Ck(pidx.begin() + k, 
+                                pidx.end());
     
-    // Get U_k(x_i), e.g. the intersection of x_j not in C_k(x_i) and x_j in C^_k(x_i)
+    // Get U_k(x_i), e.g. the intersection of x_j 
+    // not in C_k(x_i) and x_j in C^_k(x_i)
     std::vector<int> Uk(k);
     std::sort(not_Ck.begin(), not_Ck.end());
     std::sort(hat_Ck.begin(), hat_Ck.end());
-    std::vector<int>::iterator it = std::set_intersection(not_Ck.begin(), not_Ck.end(), 
-                                                          hat_Ck.begin(), hat_Ck.end(), Uk.begin());
+    std::vector<int>::iterator it 
+        = std::set_intersection(not_Ck.begin(), 
+                                not_Ck.end(), 
+                                hat_Ck.begin(), 
+                                hat_Ck.end(), 
+                                Uk.begin());
     Uk.resize(it - Uk.begin());
     
-    // Get V_k(x_i), e.g. the intersection of x_j in C_k(x_i) and x_j not in C^_k(x_i)
+    // Get V_k(x_i), e.g. the intersection of x_j in
+    // C_k(x_i) and x_j not in C^_k(x_i)
     std::vector<int> Vk(k);
     std::sort(Ck.begin(), Ck.end());
     std::sort(not_hat_Ck.begin(), not_hat_Ck.end());
-    it = std::set_intersection(Ck.begin(), Ck.end(), not_hat_Ck.begin(), not_hat_Ck.end(), Vk.begin());
+    it = std::set_intersection(Ck.begin(), Ck.end(), 
+                               not_hat_Ck.begin(), 
+                               not_hat_Ck.end(), 
+                               Vk.begin());
     Vk.resize(it - Vk.begin());
     
     // Calculate the inner sums
-    for (int j = 0; j < std::max(Uk.size(), Vk.size()); j++) {
+    for (int j = 0; j < std::max(Uk.size(), 
+                                 Vk.size()); j++) {
       if (j < Uk.size()) {
           int x_j = Uk[j];
           if (x_j != i) {
-            int r = find(idx.begin(), idx.end(), x_j) - idx.begin() + 1;
+            int r = find(idx.begin(), idx.end(), x_j) 
+                                - idx.begin() + 1;
             M_1 = M_1 + r - k;
           } // end if (x_j)
       } // end if (j)
       if (j < Vk.size()) {
         int x_j = Vk[j];
         if (x_j != i) {
-          int r_hat = find(pidx.begin(), pidx.end(), x_j) - pidx.begin() + 1;
+          int r_hat = find(pidx.begin(), pidx.end(), x_j)
+                                - pidx.begin() + 1;
           M_2 = M_2 + r_hat - k;
         } // end if (x_j)
       } // end if (j)
@@ -247,20 +320,24 @@ List GetNeighborhoodPreservation(NumericMatrix dist_data, NumericMatrix dist_pro
   
   // Return list
   List out = List::create(Named("k") = k,
-                          Named("trustworthiness") = M_1,
-                          Named("neighborhood.preservation") = M_2);
+               Named("trustworthiness") = M_1,
+               Named("neighborhood.preservation") = M_2);
   
   return out;
 } // end GetNeighborhoodPreservation
 
 // Reference:
-// J. Hirschberg and A. Rosenberg, V-Measure: A conditional entropy-based external cluster evaluation,
-// Columbia University Academic Commons, 2007, http://hdl.handle.net/10022/AC:P:21139
+// J. Hirschberg and A. Rosenberg, V-Measure: A 
+// conditional entropy-based external cluster evaluation,
+// Columbia University Academic Commons, 2007, 
+// http://hdl.handle.net/10022/AC:P:21139
 // [[Rcpp::export(name = "get.v.measure")]]
-List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0) {
+List GetVMeasure(IntegerVector labels, 
+                 IntegerVector clusters, 
+                 double beta = 1.0) {
   // Check the sizes
   if (labels.size() != clusters.size())
-    stop("get.v.measure: label and cluster vectors sizes don't match.");
+    stop("get.v.measure: vectors sizes don't match.");
   
   // Get the level sizes
   int N = labels.size();
@@ -289,7 +366,8 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   for (int k = 0; k < m; k++)
     for (int c = 0; c < n; c++)
       if (A(c, k) > 0)
-        H_CK = H_CK + A(c, k) * (log(A(c, k)) - log(sum(A(_, k))));
+        H_CK = H_CK + A(c, k) * (log(A(c, k)) 
+                                   - log(sum(A(_, k))));
   H_CK = - H_CK;
   
   // Calculate H(C)
@@ -303,7 +381,8 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   for (int c = 0; c < n; c++)
     for (int k = 0; k < m; k++)
       if (A(c, k) > 0)
-        H_KC = H_KC + A(c, k) * (log(A(c, k)) - log(sum(A(c, _))));
+        H_KC = H_KC + A(c, k) * (log(A(c, k)) 
+                                   - log(sum(A(c, _))));
   H_KC = - H_KC;
   
   // Calculate H(K)
@@ -325,8 +404,10 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   else
     comp = 1 - H_KC / H_K;
  
-  // Calculate the weighted harmonic mean of homogeneity and completeness
-  double v = ((1 + beta) * homo * comp) / ((beta * homo) + comp);
+  // Calculate the weighted harmonic mean of 
+  // homogeneity and completeness
+  double v = ((1 + beta) * homo * comp) / 
+                              ((beta * homo) + comp);
   
   // Return list
   List out = List::create(Named("beta") = beta,
@@ -336,4 +417,3 @@ List GetVMeasure(IntegerVector labels, IntegerVector clusters, double beta = 1.0
   
   return out;
 } // end GetVMeasure
-

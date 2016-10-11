@@ -49,6 +49,8 @@ subroutine vsom(neurons,dt,dtrows,dtcols,xdim,ydim,alpha,train)
     integer :: coord_lookup(1:xdim*ydim,1:2)
     integer :: ix
     real*4  :: ix_random
+    real*4  :: alpha_var
+    real*4  :: alpha_delta
 
     !$OMP THREADPRIVATE(i,ca,c,diff,squ,s,xi,ix_random)
 
@@ -76,6 +78,10 @@ subroutine vsom(neurons,dt,dtrows,dtcols,xdim,ydim,alpha,train)
         call coord2D(coord_lookup(i,:),i,xdim)
     end do
     !$OMP END DO
+    
+    ! initialize a variable and a delta for each iteration
+    alpha_var = alpha
+    alpha_delta = alpha / train
 
     !!! training !!!
     ! the epochs loop
@@ -124,10 +130,13 @@ subroutine vsom(neurons,dt,dtrows,dtcols,xdim,ydim,alpha,train)
         do i=1,dtcols
            where (cache(:,c) > 0.0) 
               !$OMP CRITICAL neurons
-              neurons(:,i) = neurons(:,i) - alpha * diff(:,i)
+              neurons(:,i) = neurons(:,i) - alpha_var * diff(:,i)
               !$OMP END CRITICAL neurons
            endwhere
         enddo
+        
+        ! update alpha
+        alpha_var = alpha_var - alpha_delta
     enddo
     !$OMP END DO
     !$OMP END PARALLEL
