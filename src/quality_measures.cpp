@@ -185,20 +185,19 @@ List GetTopographicFunction(NumericMatrix dist_cross,
           NumericVector i_idx(2);
           NumericVector j_idx(2);
           i_idx(0) = j % xdim;
-          i_idx(1) = j / xdim;
+          i_idx(1) = floor(j / xdim);
           j_idx(0) = l % xdim;
-          j_idx(1) = l / xdim;
+          j_idx(1) = floor(l / xdim);
         
           // Calculate f(k)
+		  double dist_Dm = Dm(j, l);
           if (k > 0) {
-            double dist = max(i_idx - j_idx);
-            double dist_Dm = Dm(j, l);
+            double dist = max(abs(i_idx - j_idx));
             if (dist > k && dist_Dm == 1)
               f++;
           } else if (k < 0) {
-            double dist = sqrt(sum(pow(i_idx - j_idx, 2)));
-            double dist_Dm = Dm(j, l);
-            if (dist == 1 && dist_Dm > k)
+            double dist = sum(abs(i_idx - j_idx));
+            if (dist == 1 && dist_Dm > abs(k))
               f++;
           } // end if
           
@@ -207,7 +206,7 @@ List GetTopographicFunction(NumericMatrix dist_cross,
       } // end for (j)
   
       ks(i) = k;
-      phi(i) = p / (m);
+      phi(i) = p / m;
     } // end for (i)
     
     // Set phi(0)
@@ -215,8 +214,7 @@ List GetTopographicFunction(NumericMatrix dist_cross,
   } // end if
   
   // Return list
-  List out = List::create(Named("C") = C,
-                          Named("k") = ks,
+  List out = List::create(Named("k") = ks,
                           Named("phi") = phi);
   
   return out;
@@ -389,20 +387,15 @@ List GetVMeasure(IntegerVector labels,
   for (int k = 0; k < m; k++)
     H_K = H_K + sum(A(_, k)) * log(sum(A(_, k)));
   H_K = - H_K;
-  if (std::isnan(H_K))
-    H_K = 0;
+  if (std::isnan(H_K)) H_K = 0;
   
   // Calculate homogeneity
-  if (H_C == 0)
-    homo = 1;
-  else
-    homo = 1 - H_CK / H_C;
+  if (H_C == 0) homo = 1;
+  else homo = 1 - H_CK / H_C;
   
   // Calculate completeness
-  if (H_K == 0)
-    comp = 1;
-  else
-    comp = 1 - H_KC / H_K;
+  if (H_K == 0) comp = 1;
+  else comp = 1 - H_KC / H_K;
  
   // Calculate the weighted harmonic mean of 
   // homogeneity and completeness

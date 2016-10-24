@@ -103,3 +103,49 @@ get.bmu.ratio <- function(dist.cross) {
   # Return list
   list(ratio = ratio, neurons = neurons)
 } # end get.bmu.ratio
+
+
+### get.map.diff - returns the difference between two
+#                  maps, i.e. the average distance between
+#                  the closest pairs of neurons.
+#
+# parameters:
+# - map1 first map
+# - map2 second map
+# return
+# - list containing a value:
+#   map.diff - the difference in the maps
+#
+get.map.diff <- function(map1, map2) {
+  # Make sure the maps have the same dimensions
+  if (map1$xdim != map2$xdim || map1$ydim != map2$ydim)
+    stop("maps have different dimesions")
+  
+  # Get the neurons from the maps
+  neurons.1.df <- data.frame(map1$neurons)
+  neurons.2.df <- data.frame(map2$neurons)
+  
+  # Make sure the neurons have the same number of dims
+  if (dim(neurons.1.df)[2] != dim(neurons.2.df)[2])
+    stop("map neurons have different dimesions")
+  
+  # Get the number of neurons (for extracting dist)
+  n <- dim(neurons.1.df)[1]
+  
+  # Merge the data
+  colnames(neurons.1.df) <- colnames(neurons.2.df)
+  all <- rbind(neurons.1.df, neurons.2.df)
+  
+  # Calculate the distances
+  d <- as.matrix(dist(all))
+  
+  # Pull out the distances between neurons in two maps
+  dist.cross <- d[1:n, (n + 1):(n + n)]
+  
+  # Use quantization error to find the distance
+  # between the nodes in the two maps
+  m.diff <- get.quant.err(dist.cross)$val
+  
+  # Return list
+  list(val = m.diff)
+} # end get.map.diff
